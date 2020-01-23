@@ -1,0 +1,85 @@
+---
+title: "Reproducible Researh - Course project 1"
+output: html_document
+---
+
+
+```{r setoptions, echo=FALSE}
+library(knitr)
+opts_chunk$set(echo = TRUE)
+```
+
+### Loading the data
+```{r reading the data}
+data <- read.csv("activity.csv")
+```
+
+### What is mean total number of steps taken per day?
+```{r}
+stepsAday <- with(data, tapply(steps, date, sum, na.rm = T))
+hist(stepsAday, main = "Number of steps taken each day", xlab = "Number of steps")
+```
+<br>The mean and median of the total number of steps taken per day:
+```{r}
+mean(stepsAday, na.rm = T)
+median(stepsAday, na.rm = T)
+```
+
+
+### What is the average daily activity pattern?
+```{r}
+avgs <- aggregate(x = list(steps = data$steps), by = list(intervals = data$interval), FUN = mean, na.rm = TRUE)
+library(ggplot2)
+ggplot(data = avgs, aes(intervals, steps)) + geom_line() 
+```
+<br>Which 5-minute interval contains the maximum number of steps?
+```{r}
+maxInterval <- which.max(avgs$steps)
+avgs[maxInterval,]$intervals
+```
+
+### Imputing missing values  
+The total number of missing values in the dataset:
+```{r}
+sum(!complete.cases(data))
+```
+<br> Now let's replace NA values with average steps in that day
+```{r}
+library(dplyr)
+newData <- data
+
+stepsAday <- data.frame(stepsAday)    # average steps per day
+stepsAday["date"] <- as.factor(row.names(stepsAday))
+names(stepsAday)  <- c("dayAvg", "date") 
+rownames(stepsAday) <- c()
+if (nrow(stepsAday[is.nan(stepsAday$dayAvg),])>0) stepsAday[is.nan(stepsAday$dayAvg),]$dayAvg <- c(0)
+
+newData <- left_join(newData, stepsAday, by = "date")
+names(newData) <- c("steps", "date", "interval", "dayAvg")
+newData[is.na(newData$steps),]$steps <- newData[is.na(newData$steps),]$dayAvg
+newData$dayAvg <- NULL
+
+newStepsAday <- with(newData, tapply(steps, date, sum, na.rm = T))
+hist(newStepsAday, main = "Number of steps taken each day", xlab = "Number of steps")
+```
+<br>The mean and median total number of steps taken per day after replacing NA values is: 
+```{r}
+mean(newStepsAday,   na.rm = T)
+median(newStepsAday, na.rm = T)
+```
+<br>These values do not differ from the estimates from the first part of the assignment because I replaced NAs with "day" averages (If I had replcaed NAs with interval averages, mean and median would have changed slightly). 
+
+### Are there differences in activity patterns between weekdays and weekends?
+```{r}
+newData["weekend"] <- grepl("S(at|un)", weekdays(as.Date(data$date), abbr = TRUE))
+newData[newData$weekend==FALSE,]$weekend <- "weekday"
+newData[newData$weekend==TRUE, ]$weekend <- "weekend"
+
+avgs <- aggregate(steps ~ interval + weekend, data = newData, mean)
+ggplot(avgs, aes(interval, steps)) + 
+  geom_line() + 
+  facet_grid(weekend ~ .) +
+  xlab("5-minute interval") +
+  ylab("number of steps")
+```
+<br>Yes, there are.
